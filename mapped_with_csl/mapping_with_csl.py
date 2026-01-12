@@ -31,6 +31,18 @@ def normalize_name(name: str) -> str:
     name = re.sub(r"\s+", " ", name)
     return name.strip()
 
+def normalize_hotel_code(code):
+    """
+    Normalize hotel_code:
+    - Remove .0 if it's a float like 100207330.0
+    - Convert to string
+    """
+    if code is None:
+        return None
+    if isinstance(code, float) and code.is_integer():
+        code = int(code)
+    return str(code)
+
 def safe_numeric(value, max_val=None):
     """Convert to float and clip to max_val if provided."""
     if pd.isnull(value):
@@ -62,6 +74,7 @@ print("📄 Loading Excel file...")
 df_excel = pd.read_excel(EXCEL_FILE)
 df_excel = df_excel.where(pd.notnull(df_excel), None)
 df_excel['normalized_name'] = df_excel['Global Property Name'].apply(normalize_name)
+df_excel['Global Property ID'] = df_excel['Global Property ID'].apply(normalize_hotel_code)  # Normalize hotel codes
 
 # =====================================================
 # CONNECT TO DATABASE
@@ -74,11 +87,12 @@ cur = conn.cursor()
 # FETCH MASTERFILE DATA
 # =====================================================
 print("📥 Fetching MASTERFILE data...")
-cur.execute("SELECT * FROM web_scraped_hotels';")
+cur.execute("SELECT * FROM web_scraped_hotels;")
 master_cols = [desc[0] for desc in cur.description]
 master_data = cur.fetchall()
 df_master = pd.DataFrame(master_data, columns=master_cols)
 df_master['normalized_name'] = df_master['name'].apply(normalize_name)
+df_master['hotel_code'] = df_master['hotel_code'].apply(normalize_hotel_code)  # Normalize hotel codes
 
 print(f"🔎 Loaded {len(df_master)} MASTERFILE rows")
 print(f"🔎 Loaded {len(df_excel)} Excel rows")
@@ -139,7 +153,7 @@ print(f"✅ Fuzzy matched {len(df_merged)} / {len(df_master)} MASTERFILE records
 records = []
 for _, row in df_merged.iterrows():
     record = {
-        "hotel_code": str(row.get('Global Property ID_excel')) if pd.notnull(row.get('Global Property ID_excel')) else row['hotel_code'],
+        "hotel_code": normalize_hotel_code(row.get('Global Property ID_excel')) if pd.notnull(row.get('Global Property ID_excel')) else normalize_hotel_code(row['hotel_code']),
         "chain_code": row.get('Global Chain Code_excel') if pd.notnull(row.get('Global Chain Code_excel')) else row['chain_code'],
         "chain": row['chain'],
         "name": row.get('Global Property Name_excel') if pd.notnull(row.get('Global Property Name_excel')) else row['name'],
